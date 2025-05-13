@@ -5,41 +5,47 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  packages: write
+env:
+  NODE_VERSION: '18'
+  JAVA_VERSION: '11'
+  GRADLE_VERSION: '7.5.1'
+  CORDOVA_ANDROID_VERSION: '11.0.0'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4  # Versión actualizada
+    - name: Checkout code
+      uses: actions/checkout@v4
       
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
-        node-version: '20'
-        cache: 'npm'
+        node-version: ${{ env.NODE_VERSION }}
         
-    - name: Install Cordova
-      run: npm install -g cordova
-      
-    - name: Install project dependencies
-      run: npm install
-      
+    - name: Install dependencies
+      run: |
+        npm install -g cordova
+        npm ci
+        
     - name: Add Android platform
-      run: cordova platform add android@11.0.0
-      
-    - name: Build Android
-      run: cordova build android
-      
-    - name: Upload APK
-      uses: actions/upload-artifact@v4
+      run: |
+        cordova platform remove android || true
+        cordova platform add android@${{ env.CORDOVA_ANDROID_VERSION }}
+        
+    - name: Set up Gradle
+      uses: gradle/gradle-build-action@v2
       with:
-        name: app-debug
-        path: |
-          platforms/android/app/build/outputs/apk/debug/*.apk
-          platforms/android/app/build/outputs/bundle/debug/*.aab
-        retention-days: 5
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        
+    - name: Build Android (with debug logs)
+      run: |
+        export CORDOVA_ANDROID_GRADLE_DISTRIBUTION_URL=https://services.gradle.org/distributions/gradle-${{ env.GRADLE_VERSION }}-bin.zip
+        cordova build android --verbose
